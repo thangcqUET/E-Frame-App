@@ -9,18 +9,68 @@ import {
   BleError,
   BleManager,
   Characteristic,
+  Descriptor,
   Device,
 } from "react-native-ble-plx";
 
-const DATA_SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
-const COLOR_CHARACTERISTIC_UUID = "19b10001-e8f2-537e-4f6c-d104768a1217";
+const DATA_SERVICE_UUID = "000000ff-0000-1000-8000-00805f9b34fb";
+const COLOR_CHARACTERISTIC_UUID = "0000ff01-0000-1000-8000-00805f9b34fb";
 
 const bleManager = new BleManager();
+
+// Helper function to convert byte array to Base64
+const bytesToBase64 = (bytes: number[]): string => {
+  const uint8Array = new Uint8Array(bytes);
+  let binaryString = '';
+  uint8Array.forEach(byte => {
+    binaryString += String.fromCharCode(byte);
+  });
+  return base64.encode(binaryString);
+};
 
 function useBLE() {
   const [allDevices, setAllDevices] = useState<Device[]>([]);
   const [connectedDevice, setConnectedDevice] = useState<Device | null>(null);
   const [color, setColor] = useState("white");
+  const [isConnected, setIsConnected] = useState(false);
+  const [streamingProgress, setStreamingProgress] = useState(0);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingStatus, setStreamingStatus] = useState<string>("");
+
+  // Handle device disconnection
+  const onDeviceDisconnected = (error: BleError | null, device: Device | null) => {
+    if (device) {
+      console.log(`Device ${device.name || device.id} disconnected`);
+      setConnectedDevice(null);
+      setIsConnected(false);
+      
+      if (error) {
+        console.log("Disconnection error:", error);
+        console.log("Error code:", error.errorCode);
+        console.log("Error message:", error.message);
+        
+        // Handle different types of disconnection based on error message or reason
+        if (error.message.includes("out of range") || error.message.includes("timeout")) {
+          console.log("Device went out of range or connection timeout");
+        } else if (error.message.includes("connection lost")) {
+          console.log("Connection lost unexpectedly");
+        }
+      } else {
+        console.log("Device disconnected gracefully");
+      }
+    }
+  };
+
+  // Monitor device connection status
+  const monitorDeviceConnection = (device: Device) => {
+    const subscription = bleManager.onDeviceDisconnected(
+      device.id,
+      onDeviceDisconnected
+    );
+    
+    // Store subscription for cleanup later
+    return subscription;
+  };
 
   const requestAndroid31Permissions = async () => {
     const bluetoothScanPermission = await PermissionsAndroid.request(
@@ -80,14 +130,24 @@ function useBLE() {
 
   const connectToDevice = async (device: Device) => {
     try {
+      console.log("Connecting to device:", device.name || device.id);
       const deviceConnection = await bleManager.connectToDevice(device.id);
       setConnectedDevice(deviceConnection);
+      
+      // Start monitoring for disconnection
+      const disconnectSubscription = monitorDeviceConnection(deviceConnection);
+      
       await deviceConnection.discoverAllServicesAndCharacteristics();
       bleManager.stopDeviceScan();
+      setIsConnected(true);
+      
+      console.log("Successfully connected to device:", deviceConnection.name || deviceConnection.id);
 
-      startStreamingData(deviceConnection);
+      // startStreamingData(deviceConnection);
     } catch (e) {
       console.log("FAILED TO CONNECT", e);
+      setIsConnected(false);
+      setConnectedDevice(null);
     }
   };
 
@@ -139,26 +199,120 @@ function useBLE() {
     setColor(color);
   };
 
-  const startStreamingData = async (device: Device) => {
-    if (device) {
-      device.monitorCharacteristicForService(
-        DATA_SERVICE_UUID,
-        COLOR_CHARACTERISTIC_UUID,
-        onDataUpdate
-      );
-    } else {
-      console.log("No Device Connected");
+  const startStreamingData = async (device: Device, byteData: number[]) => {
+    try {
+      if (device) {
+        console.log("Starting Data Stream for", device.name);
+        
+        // Initialize streaming state
+        setIsStreaming(true);
+        setStreamingProgress(0);
+        setStreamingStatus("Requesting MTU...");
+        
+        const mtuRequestRes = await device.requestMTU(303);
+        console.log("MTU Request Result:");
+        console.log(mtuRequestRes);
+        
+        console.log("Data length:", byteData.length);
+        setStreamingStatus("Preparing data chunks...");
+        
+        const chunks = [];
+        const limitBytes = 300; // Maximum bytes per chunk
+        for (let i = 0; i < byteData.length; i += limitBytes) {
+          chunks.push(byteData.slice(i, i + limitBytes));
+        }
+        
+        setStreamingStatus("Streaming data...");
+        let count = 0;
+        
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          await device.writeCharacteristicWithResponseForService(
+            DATA_SERVICE_UUID,
+            COLOR_CHARACTERISTIC_UUID,
+            bytesToBase64(chunk)
+          );
+          count += chunk.length;
+          const progress = Math.round((count / byteData.length) * 100);
+          setStreamingProgress(progress);
+          setStreamingStatus(`Streaming... ${progress}% (${count}/${byteData.length} bytes)`);
+          console.log("Percent of bytes sent:", progress, "%");
+          
+          // Wait for a short period to avoid overwhelming the device
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        
+        setStreamingStatus("Sending completion signal...");
+        
+        // Send completion signal
+        const endMarker = [0xFF, 0xFF, 0xFF, 0xFF]; // Special end marker bytes
+        await device.writeCharacteristicWithResponseForService(
+          DATA_SERVICE_UUID,
+          COLOR_CHARACTERISTIC_UUID,
+          bytesToBase64(endMarker)
+        );
+        
+        // Complete streaming
+        setStreamingProgress(100);
+        setStreamingStatus("Streaming completed successfully!");
+        setIsStreaming(false);
+        console.log("End marker sent - transmission complete");
+        
+        // Reset status after a delay
+        setTimeout(() => {
+          setStreamingStatus("");
+          setStreamingProgress(0);
+        }, 2000);
+        
+      } else {
+        console.log("No Device Connected");
+        setStreamingStatus("Error: No device connected");
+        setIsStreaming(false);
+      }
+    } catch (error) {
+      console.log("Error occurred while streaming data:");
+      console.log(error);
+      setStreamingStatus("Error: Streaming failed");
+      setIsStreaming(false);
+      
+      // Reset after error
+      setTimeout(() => {
+        setStreamingStatus("");
+        setStreamingProgress(0);
+      }, 3000);
+    }
+  };
+
+  // Manual disconnect function
+  const disconnectDevice = async () => {
+    try {
+      if (connectedDevice) {
+        console.log("Manually disconnecting device:", connectedDevice.name || connectedDevice.id);
+        await connectedDevice.cancelConnection();
+        setConnectedDevice(null);
+        setIsConnected(false);
+        console.log("Device disconnected successfully");
+      } else {
+        console.log("No device to disconnect");
+      }
+    } catch (error) {
+      console.log("Error disconnecting device:", error);
     }
   };
 
   return {
     connectToDevice,
+    disconnectDevice,
     allDevices,
     connectedDevice,
     color,
+    isConnected,
     requestPermissions,
     scanForPeripherals,
     startStreamingData,
+    streamingProgress,
+    isStreaming,
+    streamingStatus,
   };
 }
 

@@ -15,6 +15,7 @@ web-build/
 *.p12
 *.key
 *.mobileprovision
+android
 
 # Metro
 .metro-health-check*
@@ -33,3 +34,5 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+%ProgramData%

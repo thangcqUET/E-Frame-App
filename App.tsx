@@ -7,6 +7,7 @@ import {
   View,
 } from "react-native";
 import DeviceModal from "./DeviceConnectionModal";
+import ConnectedDeviceScreen from "./ConnectedDeviceScreen";
 import useBLE from "./useBLE";
 
 const App = () => {
@@ -14,9 +15,15 @@ const App = () => {
     allDevices,
     connectedDevice,
     connectToDevice,
+    disconnectDevice,
     color,
+    isConnected,
     requestPermissions,
     scanForPeripherals,
+    startStreamingData,
+    streamingProgress,
+    isStreaming,
+    streamingStatus,
   } = useBLE();
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
 
@@ -36,6 +43,33 @@ const App = () => {
     setIsModalVisible(true);
   };
 
+  const handleStartStreaming = (data: number[]) => {
+    if (connectedDevice) {
+      startStreamingData(connectedDevice, data);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    await disconnectDevice();
+  };
+
+  // If device is connected, show the connected device screen
+  if (connectedDevice && isConnected) {
+    return (
+      <ConnectedDeviceScreen
+        device={connectedDevice}
+        isConnected={isConnected}
+        color={color}
+        onDisconnect={handleDisconnect}
+        onStartStreaming={handleStartStreaming}
+        streamingProgress={streamingProgress}
+        isStreaming={isStreaming}
+        streamingStatus={streamingStatus}
+      />
+    );
+  }
+
+  // Otherwise, show the connection screen
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: color }]}>
       <View style={styles.heartRateTitleWrapper}>
