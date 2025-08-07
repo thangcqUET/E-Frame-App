@@ -161,8 +161,7 @@ function useBLE() {
       }
 
       if (
-        device &&
-        (device.localName === "Arduino" || device.name === "Arduino")
+        device && (device.localName === "Khung ảnh của Hà" || device.name === "Khung ảnh của Hà")
       ) {
         setAllDevices((prevState: Device[]) => {
           if (!isDuplicteDevice(prevState, device)) {

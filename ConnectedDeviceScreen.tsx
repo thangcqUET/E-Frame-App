@@ -8,7 +8,8 @@ import {
   ScrollView, 
   Image, 
   Dimensions,
-  SafeAreaView 
+  SafeAreaView,
+  Modal
 } from 'react-native';
 import { Device } from 'react-native-ble-plx';
 import { imageDatabase, ImageDataItem } from './ImageData';
@@ -89,21 +90,27 @@ const ConnectedDeviceScreen: React.FC<ConnectedDeviceScreenProps> = ({
   };
 
   const renderProgressBar = () => {
-    if (!isStreaming && streamingProgress === 0) return null;
-
     return (
-      <View style={styles.progressContainer}>
-        <Text style={styles.progressText}>{streamingStatus}</Text>
-        <View style={styles.progressBarBackground}>
-          <View 
-            style={[
-              styles.progressBarFill, 
-              { width: `${streamingProgress}%` }
-            ]} 
-          />
+      <Modal
+        visible={isStreaming || streamingProgress > 0}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.progressModal}>
+            <Text style={styles.progressText}>{streamingStatus}</Text>
+            <View style={styles.progressBarBackground}>
+              <View 
+                style={[
+                  styles.progressBarFill, 
+                  { width: `${streamingProgress}%` }
+                ]} 
+              />
+            </View>
+            <Text style={styles.progressPercentage}>{streamingProgress}%</Text>
+          </View>
         </View>
-        <Text style={styles.progressPercentage}>{streamingProgress}%</Text>
-      </View>
+      </Modal>
     );
   };
 
@@ -137,7 +144,10 @@ const ConnectedDeviceScreen: React.FC<ConnectedDeviceScreenProps> = ({
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: color }]}>
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+      <ScrollView 
+        style={styles.content} 
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: 100 }]}
+      >
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Device Connected</Text>
@@ -163,6 +173,16 @@ const ConnectedDeviceScreen: React.FC<ConnectedDeviceScreenProps> = ({
               </Text>
             </View>
           </View>
+          
+          <TouchableOpacity
+            style={[styles.disconnectButtonInCard, isStreaming && styles.disabledButton]}
+            onPress={handleDisconnect}
+            disabled={isStreaming}
+          >
+            <Text style={[styles.disconnectButtonText, isStreaming && styles.disabledButtonText]}>
+              Disconnect Device
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Image Selection Card */}
@@ -173,39 +193,29 @@ const ConnectedDeviceScreen: React.FC<ConnectedDeviceScreenProps> = ({
           </Text>
           {renderImageGrid()}
         </View>
-
-        {/* Progress Bar */}
-        {renderProgressBar()}
-
-        {/* Action Buttons */}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              (!selectedImageId || isStreaming || !isConnected) && styles.disabledButton,
-            ]}
-            onPress={handleSendImage}
-            disabled={!selectedImageId || isStreaming || !isConnected}
-          >
-            <Text style={[
-              styles.sendButtonText,
-              (!selectedImageId || isStreaming || !isConnected) && styles.disabledButtonText,
-            ]}>
-              {isStreaming ? 'Sending...' : 'Send Selected Image'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.disconnectButton, isStreaming && styles.disabledButton]}
-            onPress={handleDisconnect}
-            disabled={isStreaming}
-          >
-            <Text style={[styles.disconnectButtonText, isStreaming && styles.disabledButtonText]}>
-              Disconnect Device
-            </Text>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
+
+      {/* Fixed Button Container */}
+      <View style={styles.fixedButtonContainer}>
+        <TouchableOpacity
+          style={[
+            styles.sendButton,
+            (!selectedImageId || isStreaming || !isConnected) && styles.disabledButton,
+          ]}
+          onPress={handleSendImage}
+          disabled={!selectedImageId || isStreaming || !isConnected}
+        >
+          <Text style={[
+            styles.sendButtonText,
+            (!selectedImageId || isStreaming || !isConnected) && styles.disabledButtonText,
+          ]}>
+            {isStreaming ? 'Sending...' : 'Send Selected Image'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Progress Modal */}
+      {renderProgressBar()}
     </SafeAreaView>
   );
 };
@@ -297,7 +307,29 @@ const styles = StyleSheet.create({
     color: "#F44336",
     fontWeight: "bold",
   },
-  // Progress bar styles
+  // Modal overlay styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  progressModal: {
+    backgroundColor: "white",
+    borderRadius: 12,
+    padding: 30,
+    margin: 20,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    minWidth: 250,
+  },
+  // Progress bar styles (now for modal)
   progressContainer: {
     backgroundColor: "white",
     borderRadius: 12,
@@ -364,6 +396,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: "#E0E0E0",
     marginBottom: 8,
+    
   },
   imageName: {
     fontSize: 14,
@@ -373,7 +406,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   imageSize: {
-    fontSize: 12,
+    fontSize: 1,
     color: "#666",
     textAlign: "center",
   },
@@ -397,6 +430,26 @@ const styles = StyleSheet.create({
   buttonContainer: {
     marginTop: 20,
   },
+  fixedButtonContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'white',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    paddingBottom: 7,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: -2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
   sendButton: {
     backgroundColor: "#4CAF50",
     borderRadius: 8,
@@ -414,6 +467,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 15,
     alignItems: "center",
+  },
+  disconnectButtonInCard: {
+    backgroundColor: "#FF6060",
+    borderRadius: 8,
+    padding: 15,
+    alignItems: "center",
+    marginTop: 15,
   },
   disconnectButtonText: {
     color: "white",
