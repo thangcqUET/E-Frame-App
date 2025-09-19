@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   SafeAreaView,
   StyleSheet,
@@ -9,6 +9,7 @@ import {
 import DeviceModal from "./DeviceConnectionModal";
 import ConnectedDeviceScreen from "./ConnectedDeviceScreen";
 import useBLE from "./useBLE";
+import { imageStorageService } from "./ImageStorageService";
 
 const App = () => {
   const {
@@ -26,6 +27,11 @@ const App = () => {
     streamingStatus,
   } = useBLE();
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
+
+  // Initialize the image storage service when the app starts
+  useEffect(() => {
+    imageStorageService.initialize().catch(console.error);
+  }, []);
 
   const scanForDevices = async () => {
     const isPermissionsEnabled = await requestPermissions();

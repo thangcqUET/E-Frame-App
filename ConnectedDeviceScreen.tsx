@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -12,7 +12,8 @@ import {
   Modal
 } from 'react-native';
 import { Device } from 'react-native-ble-plx';
-import { imageDatabase, ImageDataItem } from './ImageData';
+import { ImageDataItem, useImageDatabase } from './ImageStorageService';
+import ImageManagementModal from './ImageManagementModal';
 
 interface ConnectedDeviceScreenProps {
   device: Device;
@@ -39,6 +40,8 @@ const ConnectedDeviceScreen: React.FC<ConnectedDeviceScreenProps> = ({
   streamingStatus,
 }) => {
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
+  const [isManageModalVisible, setIsManageModalVisible] = useState(false);
+  const { images, refreshImages } = useImageDatabase();
 
   const handleDisconnect = () => {
     Alert.alert(
@@ -70,7 +73,7 @@ const ConnectedDeviceScreen: React.FC<ConnectedDeviceScreenProps> = ({
       return;
     }
 
-    const selectedImage = imageDatabase.find(img => img.id === selectedImageId);
+    const selectedImage = images.find(img => img.id === selectedImageId);
     if (selectedImage) {
       Alert.alert(
         'Send Image',
@@ -86,6 +89,18 @@ const ConnectedDeviceScreen: React.FC<ConnectedDeviceScreenProps> = ({
           },
         ]
       );
+    }
+  };
+
+  const handleManageImages = () => {
+    setIsManageModalVisible(true);
+  };
+
+  const handleImagesChanged = () => {
+    refreshImages();
+    // Reset selection if the selected image was deleted
+    if (selectedImageId && !images.find(img => img.id === selectedImageId)) {
+      setSelectedImageId(null);
     }
   };
 
@@ -115,9 +130,18 @@ const ConnectedDeviceScreen: React.FC<ConnectedDeviceScreenProps> = ({
   };
 
   const renderImageGrid = () => {
+    if (images.length === 0) {
+      return (
+        <View style={styles.emptyImagesContainer}>
+          <Text style={styles.emptyImagesText}>No images available</Text>
+          <Text style={styles.emptyImagesSubtext}>Tap "Manage Images" to add your first image</Text>
+        </View>
+      );
+    }
+
     return (
       <View style={styles.imageGrid}>
-        {imageDatabase.map((image, index) => (
+        {images.map((image: ImageDataItem) => (
           <TouchableOpacity
             key={image.id}
             style={[
@@ -187,7 +211,17 @@ const ConnectedDeviceScreen: React.FC<ConnectedDeviceScreenProps> = ({
 
         {/* Image Selection Card */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Select Image to Send</Text>
+          <View style={styles.cardHeader}>
+            <View style={styles.cardTitleContainer}>
+              <Text style={styles.cardTitle}>Select Image to Send</Text>
+              <TouchableOpacity
+                style={styles.manageButton}
+                onPress={handleManageImages}
+              >
+                <Text style={styles.manageButtonText}>Manage Images</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
           <Text style={styles.cardSubtitle}>
             Choose an image from the gallery below. Each image contains display data for the e-paper device.
           </Text>
@@ -216,6 +250,13 @@ const ConnectedDeviceScreen: React.FC<ConnectedDeviceScreenProps> = ({
 
       {/* Progress Modal */}
       {renderProgressBar()}
+
+      {/* Image Management Modal */}
+      <ImageManagementModal
+        visible={isManageModalVisible}
+        onClose={() => setIsManageModalVisible(false)}
+        onImagesChanged={handleImagesChanged}
+      />
     </SafeAreaView>
   );
 };
@@ -485,6 +526,46 @@ const styles = StyleSheet.create({
   },
   disabledButtonText: {
     color: "#999999",
+  },
+  // Card header styles for manage button
+  cardHeader: {
+    marginBottom: 0,
+  },
+  cardTitleContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+  },
+  manageButton: {
+    backgroundColor: "#2196F3",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  manageButtonText: {
+    color: "white",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  // Empty images state
+  emptyImagesContainer: {
+    padding: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyImagesText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#666",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  emptyImagesSubtext: {
+    fontSize: 14,
+    color: "#999",
+    textAlign: "center",
+    lineHeight: 20,
   },
 });
 
