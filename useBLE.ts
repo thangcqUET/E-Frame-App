@@ -208,15 +208,15 @@ function useBLE() {
         setStreamingProgress(0);
         setStreamingStatus("Requesting MTU...");
         
-        const mtuRequestRes = await device.requestMTU(303);
+        const mtuRequestRes = await device.requestMTU(512);
         console.log("MTU Request Result:");
-        console.log(mtuRequestRes);
+        console.log("Current MTU size:", mtuRequestRes.mtu);
         
         console.log("Data length:", byteData.length);
         setStreamingStatus("Preparing data chunks...");
         
         const chunks = [];
-        const limitBytes = 300; // Maximum bytes per chunk
+        const limitBytes = mtuRequestRes.mtu; // Maximum bytes per chunk
         for (let i = 0; i < byteData.length; i += limitBytes) {
           chunks.push(byteData.slice(i, i + limitBytes));
         }
