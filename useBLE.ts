@@ -161,7 +161,7 @@ function useBLE() {
       }
 
       if (
-        device && (device.localName === "Khung ảnh của Hà" || device.name === "Khung ảnh của Hà")
+        device && (device.localName?.startsWith("E-Frame") || device.name?.startsWith("E-Frame"))
       ) {
         setAllDevices((prevState: Device[]) => {
           if (!isDuplicteDevice(prevState, device)) {
